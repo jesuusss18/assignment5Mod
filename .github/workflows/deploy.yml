@@ -11,9 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+    # 1️⃣ Descargar el código
     - name: Checkout code
       uses: actions/checkout@v4
     
+    # 2️⃣ Configurar Node.js (para frontend y backend)
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
@@ -23,26 +25,31 @@ jobs:
           backend/package-lock.json
           frontend/package-lock.json
     
+    # 3️⃣ Instalar dependencias del backend
     - name: Install backend dependencies
       run: |
         cd backend
         npm ci
     
+    # 4️⃣ Instalar dependencias del frontend
     - name: Install frontend dependencies
       run: |
         cd frontend
         npm ci
     
+    # 5️⃣ Ejecutar tests del backend
     - name: Run backend tests
       run: |
         cd backend
         npm test
     
+    # 6️⃣ Ejecutar tests del frontend
     - name: Run frontend tests
       run: |
         cd frontend
         npm test
     
+    # 7️⃣ Autenticarse con Google Cloud (usando Service Account)
     - name: Authenticate to Google Cloud
       if: success()
       uses: google-github-actions/auth@v1
@@ -50,33 +57,41 @@ jobs:
         credentials_json: ${{ secrets.GCP_SA_KEY }}
         project_id: ${{ secrets.GCP_PROJECT_ID }}
     
+    # 8️⃣ Instalar CLI de Google Cloud
     - name: Set up Google Cloud CLI
       if: success()
       uses: google-github-actions/setup-gcloud@v1
       with:
         project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+    # 9️⃣ Asegurar que el proyecto esté correctamente configurado
+    - name: Set gcloud project
+      run: gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
     
+    # 🔟 Configurar Docker para autenticarse con Google Cloud
     - name: Configure Docker for Google Cloud
       if: success()
       run: |
         gcloud auth configure-docker
-    
+
+    # 11️⃣ Construir y subir la imagen del backend
     - name: Build and push backend image
       if: success()
       run: |
         cd backend
         docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/recipe-backend:${{ github.sha }} .
         docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/recipe-backend:${{ github.sha }}
-    
+
+    # 12️⃣ Construir y subir la imagen del frontend
     - name: Build and push frontend image
       if: success()
       run: |
         cd frontend
-        # Get the backend URL for the frontend build
         BACKEND_URL=$(gcloud run services describe recipe-backend --region=${{ secrets.GCP_REGION }} --format='value(status.url)' 2>/dev/null || echo "https://recipe-backend-placeholder.run.app")
         docker build --build-arg VITE_API_URL=$BACKEND_URL -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/recipe-frontend:${{ github.sha }} .
         docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/recipe-frontend:${{ github.sha }}
-    
+
+    # 13️⃣ Desplegar el backend a Cloud Run
     - name: Deploy backend to Cloud Run
       if: success()
       run: |
@@ -88,7 +103,8 @@ jobs:
           --port 5000 \
           --memory 512Mi \
           --cpu 1
-    
+
+    # 14️⃣ Desplegar el frontend a Cloud Run
     - name: Deploy frontend to Cloud Run
       if: success()
       run: |
@@ -100,9 +116,10 @@ jobs:
           --port 80 \
           --memory 512Mi \
           --cpu 1
-    
+
+    # 15️⃣ Mostrar las URLs desplegadas
     - name: Get deployed URLs
       if: success()
       run: |
-        echo "Backend URL: $(gcloud run services describe recipe-backend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')"
-        echo "Frontend URL: $(gcloud run services describe recipe-frontend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')"
+        echo "✅ Backend URL: $(gcloud run services describe recipe-backend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')"
+        echo "✅ Frontend URL: $(gcloud run services describe recipe-frontend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')"
